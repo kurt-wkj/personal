@@ -30,6 +30,32 @@ jobs:
           mkdir -p _site
           tar -xzf kurt-personal-site.tar.gz -C _site
 
+      - name: Add dream library
+        env:
+          DREAM_LIBRARY_URL: https://github.com/kurt-wkj/personal/releases/download/dream-library-20261111-r1/dream-library.tar.gz
+          DREAM_LIBRARY_SHA256: '6801ac1bb47546c151d6cc69311bfc4d4d8e09a982b9e9618070635a4ae8103c'
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob="$RUNNER_TEMP/dream-library.tar.gz"
+          curl --fail --show-error --location --retry 3 --output "$blob" "$DREAM_LIBRARY_URL"
+          printf '%s  %s\n' "$DREAM_LIBRARY_SHA256" "$blob" | sha256sum --check --strict
+          test ! -e _site/dream-library
+          tar -xzf "$blob" -C _site --no-same-owner --no-same-permissions
+          chmod -R a+rX _site/dream-library
+          test -s _site/dream-library/library.json
+          python3 - <<'PYTHON'
+          import json
+          from pathlib import Path
+          root = Path('_site')
+          manifest = json.loads((root / 'dream-library/library.json').read_text())
+          assert manifest['articleCount'] == 251068
+          assert manifest['release'] == 'zgjm-20261111-r1'
+          size = sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
+          assert size < 1_000_000_000, f'GitHub Pages site exceeds its size budget: {size} bytes'
+          print(f'Published site size: {size} bytes; dream library: {manifest["articleCount"]} articles')
+          PYTHON
+
       - name: Configure Pages
         uses: actions/configure-pages@v6
 

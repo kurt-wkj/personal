@@ -30,6 +30,28 @@ jobs:
           mkdir -p _site
           tar -xzf kurt-personal-site.tar.gz -C _site
 
+      - name: Add Jianwen Web
+        if: ${{ hashFiles('jianwen-web.sha256') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum --check --strict jianwen-web.sha256
+          mapfile -t parts < <(awk '{print $2}' jianwen-web.sha256)
+          cat "${parts[@]}" | tar -xz -C _site --no-same-owner --no-same-permissions
+          chmod -R a+rX _site/jianwen
+          test -s _site/jianwen/index.html
+          python3 - <<'PYTHON'
+          import json
+          from pathlib import Path
+          root = Path('_site/jianwen')
+          manifest = json.loads((root / 'audio/audio.json').read_text())
+          media = {cue['file'] for article in manifest['articles'] for cue in article['sentences']}
+          assert len(manifest['articles']) == 71
+          assert len(media) == 209
+          assert all((root / 'audio' / name).is_file() for name in media)
+          print(f'Jianwen Web: {len(manifest["articles"])} narrated articles, {len(media)} tracks')
+          PYTHON
+
       - name: Add dream library
         env:
           DREAM_LIBRARY_URL: https://github.com/kurt-wkj/personal/releases/download/dream-library-20261111-r1/dream-library.tar.gz

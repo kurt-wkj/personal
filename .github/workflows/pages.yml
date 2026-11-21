@@ -52,6 +52,34 @@ jobs:
           print(f'Jianwen Web: {len(manifest["articles"])} narrated articles, {len(media)} tracks')
           PYTHON
 
+      - name: Apply Jianwen audio update
+        if: ${{ hashFiles('jianwen-audio-update.sha256') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum --check --strict jianwen-audio-update.sha256
+          tar -xzf jianwen-audio-update.tar.gz -C _site --no-same-owner --no-same-permissions
+          chmod -R a+rX _site/jianwen
+          python3 - <<'PYTHON'
+          import hashlib
+          import json
+          from pathlib import Path, PurePosixPath
+          release = json.loads(Path('jianwen-audio-update.json').read_text())
+          root = Path('_site/jianwen')
+          audio = json.loads((root / 'audio/audio.json').read_text())
+          media = {cue['file'] for article in audio['articles'] for cue in article['sentences']}
+          assert len(audio['articles']) == release['articles']
+          assert len(media) == release['tracks']
+          assert media == set(release['media'])
+          for name, digest in release['files'].items():
+              assert name.startswith('jianwen/') and '..' not in PurePosixPath(name).parts
+              assert hashlib.sha256((Path('_site') / name).read_bytes()).hexdigest() == digest, name
+          for name, digest in release['media'].items():
+              assert '..' not in PurePosixPath(name).parts and not name.startswith('/')
+              assert hashlib.sha256((root / 'audio' / name).read_bytes()).hexdigest() == digest, name
+          print(f"Jianwen updated: {len(audio['articles'])} narrated articles, {len(media)} tracks")
+          PYTHON
+
       - name: Add dream library
         env:
           DREAM_LIBRARY_URL: https://github.com/kurt-wkj/personal/releases/download/dream-library-20261111-r1/dream-library.tar.gz
